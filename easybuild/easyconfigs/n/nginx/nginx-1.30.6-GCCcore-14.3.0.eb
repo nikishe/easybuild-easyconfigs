@@ -1,0 +1,50 @@
+easyblock = 'ConfigureMake'
+
+name = 'nginx'
+version = '1.30.6'
+
+homepage = 'https://nginx.org/'
+description = """nginx is an HTTP and reverse proxy server. Built here with SSL support
+to act as an authenticating proxy in front of per-job services such as Ollama."""
+
+toolchain = {'name': 'GCCcore', 'version': '14.3.0'}
+
+source_urls = ['https://nginx.org/download/']
+sources = [SOURCELOWER_TAR_GZ]
+checksums = ['3cf46f5ed7504d460125866b7bea99fb357f31d887e2e63b35503310e9b8b6c8']
+
+# add the sha256 with: eb nginx-1.30.6-GCCcore-14.3.0.eb --inject-checksums
+
+builddependencies = [
+    ('binutils', '2.44'),
+]
+
+dependencies = [
+    ('zlib', '1.3.1'),
+    ('PCRE2', '10.45'),
+    ('OpenSSL', '3', '', SYSTEM),
+]
+
+# nginx has its own configure script: only --prefix is passed by default
+configopts = ' '.join([
+    '--with-http_ssl_module',
+    '--with-http_v2_module',
+    '--with-http_realip_module',
+    '--with-pcre',
+    '--with-pcre-jit',
+    '--with-threads',
+])
+
+modextrapaths = {'PATH': 'sbin'}
+
+sanity_check_paths = {
+    'files': ['sbin/nginx'],
+    'dirs': ['conf'],
+}
+
+sanity_check_commands = [
+    'nginx -V',
+    'nginx -V 2>&1 | grep -q -- --with-http_ssl_module',
+]
+
+moduleclass = 'tools'

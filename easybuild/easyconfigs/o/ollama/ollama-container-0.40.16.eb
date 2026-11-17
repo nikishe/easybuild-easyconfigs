@@ -1,0 +1,102 @@
+# Build and install the ollama 0.40.16 container
+
+easyblock = "Binary"
+
+name = "ollama"
+version = "container-0.40.16"
+
+homepage = 'https://ollama.com/'
+description = """Get up and running with large language models."""
+
+modloadmsg = """------------------------------------------------------------
+This module loads a build of ollama-0.40.16 from
+an apptainer container image. It does not support multi-node
+jobs. 
+------------------------------------------------------------"""
+
+
+toolchain = SYSTEM
+osdependencies = []  
+
+# The file containing the container definition
+local_def_file = "%(name)s-%(version)s.def"
+
+
+sources = [
+    {"filename": local_def_file},
+]
+checksums = ['94cc32de44c2bb36d89d486c2a92959c3382f12854900e321294c10cb98a152a']
+
+extract_sources = False
+
+
+# name of the SIF image to generate
+local_sif_image = "%(name)s-%(version)s.sif"
+
+# bin/free_port: print a TCP port that is free on this node
+local_free_port_script = """#!/bin/bash
+python3 -c 'import socket; s = socket.socket(); s.bind(("", 0)); print(s.getsockname()[1])'
+"""
+
+# bin/ollama: run ollama from the container, with the models folder bound
+local_ollama_script = """#!/bin/bash
+free_port() {
+  python3 -c 'import socket; s = socket.socket(); s.bind(("", 0)); print(s.getsockname()[1])'
+}
+
+# Models folder: keep the caller's setting, otherwise use Ollama's default
+export OLLAMA_MODELS="${OLLAMA_MODELS:-$HOME/.ollama/models}"
+mkdir -p "$OLLAMA_MODELS"
+
+# Server address: keep the caller's setting, otherwise pick a free port
+if [[ -z "${OLLAMA_HOST:-}" ]]; then
+  export OLLAMA_HOST=127.0.0.1:$(free_port)
+  echo "ollama: OLLAMA_HOST was not set, using $OLLAMA_HOST" >&2
+fi
+
+exec apptainer exec --nv --bind "$OLLAMA_MODELS" \\
+    --env OLLAMA_MODELS="$OLLAMA_MODELS" \\
+    --env OLLAMA_HOST="$OLLAMA_HOST" \\
+    %(installdir)s/""" + local_sif_image + """ ollama "$@"
+"""
+
+# bin/ollama_shell: open a shell in the container, with the models folder bound
+local_ollama_shell_script = """#!/bin/bash
+# Models folder: keep the caller's setting, otherwise use Ollama's default
+export OLLAMA_MODELS="${OLLAMA_MODELS:-$HOME/.ollama/models}"
+mkdir -p "$OLLAMA_MODELS"
+
+exec apptainer shell --nv --bind "$OLLAMA_MODELS" \\
+    --env OLLAMA_MODELS="$OLLAMA_MODELS" \\
+    %(installdir)s/""" + local_sif_image + """
+"""
+
+
+# build the apptainer image and copy it to the install dir
+install_cmds = [
+    "apptainer build --fakeroot " + local_sif_image + " " + local_def_file,
+    "cp " + local_sif_image + " %(installdir)s",
+    "mkdir -p %(installdir)s/bin",
+    "cat > %(installdir)s/bin/free_port << 'EOF'\n" + local_free_port_script + "EOF\n",
+    "cat > %(installdir)s/bin/ollama << 'EOF'\n" + local_ollama_script + "EOF\n",
+    "cat > %(installdir)s/bin/ollama_shell << 'EOF'\n" + local_ollama_shell_script + "EOF\n",
+    "chmod +x %(installdir)s/bin/free_port",
+    "chmod +x %(installdir)s/bin/ollama",
+    "chmod +x %(installdir)s/bin/ollama_shell",
+]
+
+# full path of the image, for scripts that call apptainer themselves
+modextravars = {
+    "OLLAMA_SIF": "%(installdir)s/" + local_sif_image,
+}
+
+sanity_check_paths = {
+    "files": ["bin/ollama", "bin/ollama_shell", "bin/free_port"],
+    "dirs": [],
+}
+
+sanity_check_commands = ["ollama -v",
+    'test -f "$OLLAMA_SIF"',
+]
+
+moduleclass = "ai"

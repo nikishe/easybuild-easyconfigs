@@ -1,0 +1,10 @@
+Bootstrap: docker
+From: ollama/ollama:0.40.16
+
+%post
+    apt-get update
+    apt-get install -y --no-install-recommends socat curl
+    rm -rf /var/lib/apt/lists/*
+
+%labels
+    Purpose Ollama plus socat for network-isolated Slurm jobs with nginx
